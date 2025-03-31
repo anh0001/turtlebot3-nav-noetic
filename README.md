@@ -33,7 +33,7 @@ A ROS Noetic package for autonomous navigation of the Turtlebot3 robot in a Gaze
    ```bash
    mkdir -p ~/catkin_ws/src
    cd ~/catkin_ws/src
-   git clone https://github.com/YOUR_USERNAME/turtlebot3-nav-noetic.git
+   git clone https://github.com/anh0001/turtlebot3-nav-noetic.git
    cd ..
    catkin_make
    source devel/setup.bash
@@ -51,7 +51,7 @@ A ROS Noetic package for autonomous navigation of the Turtlebot3 robot in a Gaze
 
 2. Clone this repository:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/turtlebot3-nav-noetic.git
+   git clone https://github.com/anh0001/turtlebot3-nav-noetic.git
    cd turtlebot3-nav-noetic
    ```
 
@@ -62,7 +62,6 @@ A ROS Noetic package for autonomous navigation of the Turtlebot3 robot in a Gaze
 
 4. Access the environment via noVNC:
    - Open a web browser and navigate to `http://localhost:6080`
-   - Default password: `rosdev`
 
 ## Usage
 
