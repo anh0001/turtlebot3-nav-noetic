@@ -67,6 +67,11 @@ RUN apt-get install -y \
     lxde \
     xdg-utils
 
+# Add desktop shortcuts
+RUN mkdir -p /root/Desktop
+RUN echo '[Desktop Entry]\nType=Application\nName=Terminal\nExec=terminator\nIcon=terminal\nTerminal=false' > /root/Desktop/terminal.desktop && \
+    chmod +x /root/Desktop/*.desktop
+
 # Set up ROS environment
 RUN echo "source /opt/ros/noetic/setup.bash" >> /root/.bashrc
 RUN echo "export TURTLEBOT3_MODEL=burger" >> /root/.bashrc
