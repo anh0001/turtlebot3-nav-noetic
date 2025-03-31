@@ -82,6 +82,22 @@ roslaunch turtlebot3-nav-noetic turtlebot3_navigation.launch
 rosrun turtlebot3-nav-noetic obstacle_avoidance.py
 ```
 
+### Creating Maps with SLAM
+
+```bash
+# Create maps directory
+mkdir -p ~/catkin_ws/src/turtlebot3-nav-noetic/maps
+
+# First run SLAM to create a map (in a new terminal)
+roslaunch turtlebot3_slam turtlebot3_slam.launch
+
+# Drive the robot around to map the environment (in another terminal)
+roslaunch turtlebot3_teleop turtlebot3_teleop_key.launch
+
+# When mapping is complete, save the map
+rosrun map_server map_saver -f ~/catkin_ws/src/turtlebot3-nav-noetic/maps/map
+```
+
 ## Docker Environment Details
 
 The Docker environment includes:
