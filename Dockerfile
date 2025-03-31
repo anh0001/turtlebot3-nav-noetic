@@ -76,6 +76,11 @@ RUN echo '[Desktop Entry]\nType=Application\nName=Terminal\nExec=terminator\nIco
 RUN echo "source /opt/ros/noetic/setup.bash" >> /root/.bashrc
 RUN echo "export TURTLEBOT3_MODEL=burger" >> /root/.bashrc
 
+# Create a welcome message that displays when the container starts
+RUN echo '#!/bin/bash\necho -e "\n\033[1;32mWelcome to TurtleBot3 Navigation Simulator!\033[0m\n\nAccess the simulation through your browser at: \033[1;36mhttp://localhost:6080/vnc.html\033[0m\n\nCommands to run in this terminal:\n\033[1;33m1. Launch the master launch file that coordinates both simulation and navigation:\033[0m\n   roslaunch turtlebot3-nav-noetic turtlebot3_master.launch\n\033[1;33m2. For obstacle avoidance:\033[0m\n   rosrun turtlebot3-nav-noetic obstacle_avoidance.py\n\033[1;33m3. For patrol mode:\033[0m\n   rosrun turtlebot3-nav-noetic patrol.py\n"' > /root/welcome.sh && \
+    chmod +x /root/welcome.sh && \
+    echo "/root/welcome.sh" >> /root/.bashrc
+
 # Create and set up the catkin workspace
 RUN mkdir -p /root/catkin_ws/src
 WORKDIR /root/catkin_ws

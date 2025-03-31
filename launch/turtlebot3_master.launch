@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Arguments -->
+  <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>
+  
+  <!-- Centralized initial pose parameters -->
+  <arg name="initial_pose_x" default="-2.0"/>
+  <arg name="initial_pose_y" default="0.0"/>
+  <arg name="initial_pose_z" default="0.0"/>
+  <arg name="initial_pose_a" default="0.0"/> <!-- yaw in radians -->
+  
+  <!-- Other common arguments -->
+  <arg name="open_rviz" default="true"/>
+  <arg name="move_forward_only" default="false"/>
+  <arg name="gui" default="true"/>
+  <arg name="world_name" default="turtlebot3_world"/>
+
+  <!-- Launch the simulation with the centralized initial pose -->
+  <include file="$(find turtlebot3-nav-noetic)/launch/turtlebot3_simulation.launch">
+    <arg name="model" value="$(arg model)"/>
+    <arg name="x_pos" value="$(arg initial_pose_x)"/>
+    <arg name="y_pos" value="$(arg initial_pose_y)"/>
+    <arg name="z_pos" value="$(arg initial_pose_z)"/>
+    <arg name="gui" value="$(arg gui)"/>
+    <arg name="world_name" value="$(arg world_name)"/>
+  </include>
+
+  <!-- Launch the navigation with the same centralized initial pose -->
+  <include file="$(find turtlebot3-nav-noetic)/launch/turtlebot3_navigation.launch">
+    <arg name="model" value="$(arg model)"/>
+    <arg name="initial_pose_x" value="$(arg initial_pose_x)"/>
+    <arg name="initial_pose_y" value="$(arg initial_pose_y)"/>
+    <arg name="initial_pose_a" value="$(arg initial_pose_a)"/>
+    <arg name="open_rviz" value="$(arg open_rviz)"/>
+    <arg name="move_forward_only" value="$(arg move_forward_only)"/>
+  </include>
+</launch>
