@@ -1,0 +1,18 @@
+version: '3'
+
+services:
+  turtlebot3-nav:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: turtlebot3-nav-noetic
+    environment:
+      - DISPLAY=:1
+      - TURTLEBOT3_MODEL=burger
+    ports:
+      - "6080:6080"  # noVNC web interface
+    volumes:
+      - ./:/root/catkin_ws/src/turtlebot3-nav-noetic
+    restart: unless-stopped
+    # For Apple Silicon Macs, we need to specify the platform
+    platform: linux/amd64
