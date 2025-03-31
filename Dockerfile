@@ -62,8 +62,14 @@ RUN apt-get install -y \
     ros-noetic-joint-state-publisher \
     ros-noetic-rviz
 
+# Set up a lightweight desktop environment
+RUN apt-get install -y \
+    lxde \
+    xdg-utils
+
 # Set up ROS environment
 RUN echo "source /opt/ros/noetic/setup.bash" >> /root/.bashrc
+RUN echo "export TURTLEBOT3_MODEL=burger" >> /root/.bashrc
 
 # Create and set up the catkin workspace
 RUN mkdir -p /root/catkin_ws/src
@@ -71,28 +77,21 @@ WORKDIR /root/catkin_ws
 RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && catkin_make"
 RUN echo "source /root/catkin_ws/devel/setup.bash" >> /root/.bashrc
 
-# Set the Turtlebot model
-RUN echo "export TURTLEBOT3_MODEL=burger" >> /root/.bashrc
+# Copy the project files into the workspace
+COPY . /root/catkin_ws/src/turtlebot3-nav-noetic/
 
-# Set up a lightweight desktop environment
-RUN apt-get install -y \
-    lxde \
-    xdg-utils
+# Make scripts executable
+RUN chmod +x /root/catkin_ws/src/turtlebot3-nav-noetic/scripts/*.py
 
-# Set up a user with sudo privileges
-RUN useradd -m -s /bin/bash -G sudo rosuser && \
-    echo "rosuser:rosdev" | chpasswd && \
-    echo "rosuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+# Build the workspace
+RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && cd /root/catkin_ws && catkin_make"
 
 # Set up supervisor to run Xvfb, x11vnc, and noVNC
 RUN mkdir -p /var/log/supervisor
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Copy the project files into the workspace
-COPY . /root/catkin_ws/src/turtlebot3-nav-noetic/
-
-# Build the workspace
-RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && cd /root/catkin_ws && catkin_make"
+# Update supervisord.conf to run LXDE as root
+RUN sed -i 's/user=rosuser/user=root/g' /etc/supervisor/conf.d/supervisord.conf
 
 # Expose the noVNC port
 EXPOSE 6080
