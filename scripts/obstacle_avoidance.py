@@ -22,6 +22,8 @@ class SimpleTurtlebotNavigator:
         self.obstacle_threshold = rospy.get_param('~obstacle_threshold', 0.5)  # Increased for better responsiveness
         self.linear_speed = rospy.get_param('~linear_speed', 0.2)
         self.angular_speed = rospy.get_param('~angular_speed', 0.6)
+        self.stuck_timeout = rospy.get_param('~stuck_timeout', 3.0)  # Time in seconds before considering robot stuck
+        self.stuck_distance_threshold = rospy.get_param('~stuck_distance_threshold', 0.05)  # Minimum movement required
         
         # Status variables
         self.position = {'x': 0.0, 'y': 0.0}
@@ -36,18 +38,27 @@ class SimpleTurtlebotNavigator:
         self.turning = False
         self.turn_direction = 1  # 1 for left, -1 for right
         
+        # Stuck detection variables
+        self.is_stuck = False
+        self.last_significant_movement_time = rospy.Time.now()
+        self.last_position = {'x': 0.0, 'y': 0.0}
+        self.using_move_base_fallback = False
+        self.move_base_available = False  # Will be set based on server availability
+        
         # TF Listener for transformations
         self.tf_listener = tf.TransformListener()
         
-        # Create move_base client if enabled
-        if self.use_move_base:
+        # Create move_base client (even if not initially using it, for fallback)
+        try:
             self.move_base_client = actionlib.SimpleActionClient('move_base', MoveBaseAction)
+            rospy.loginfo("Waiting for move_base action server...")
             server_available = self.move_base_client.wait_for_server(rospy.Duration(5.0))
             if not server_available:
-                rospy.logwarn("move_base action server not available, falling back to manual control")
-                self.use_move_base = False
+                rospy.logwarn("move_base action server not available, fallback will not be possible")
+                self.move_base_available = False
             else:
                 rospy.loginfo("Connected to move_base action server")
+                self.move_base_available = True
                 
                 # Subscribe to move_base result
                 self.move_base_result_sub = rospy.Subscriber(
@@ -55,6 +66,9 @@ class SimpleTurtlebotNavigator:
                     MoveBaseActionResult,
                     self.move_base_result_callback
                 )
+        except Exception as e:
+            rospy.logerr(f"Error connecting to move_base: {e}")
+            self.move_base_available = False
         
         # Publishers and Subscribers
         self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
@@ -84,6 +98,21 @@ class SimpleTurtlebotNavigator:
         orientation_q = msg.pose.pose.orientation
         orientation_list = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
         (self.orientation['roll'], self.orientation['pitch'], self.orientation['yaw']) = euler_from_quaternion(orientation_list)
+        
+        # Check for significant movement for stuck detection
+        distance_moved = sqrt((self.position['x'] - self.last_position['x'])**2 + 
+                             (self.position['y'] - self.last_position['y'])**2)
+        
+        if distance_moved > self.stuck_distance_threshold:
+            # We've moved a significant distance, update the timer
+            self.last_significant_movement_time = rospy.Time.now()
+            # Update last position
+            self.last_position['x'] = self.position['x']
+            self.last_position['y'] = self.position['y']
+            # Reset stuck flag if we were previously stuck
+            if self.is_stuck:
+                self.is_stuck = False
+                rospy.loginfo("Robot is moving again - no longer stuck")
 
     def scan_callback(self, msg):
         # Process laser scan data - simplified to just check front, left, right
@@ -97,10 +126,15 @@ class SimpleTurtlebotNavigator:
         num_points = len(self.laser_ranges)
         
         if num_points > 0:
-            # Define sectors (assuming 360 degree scan)
-            front_indices = list(range(num_points - 45, num_points)) + list(range(0, 45))
-            left_indices = list(range(45, 135))
-            right_indices = list(range(num_points - 135, num_points - 45))
+            # Define sectors (assuming 360 degree scan with 0° pointing forward)
+            # TurtleBot3 LiDAR scan typically starts from behind and goes counterclockwise
+            # Identify front, left, and right sectors
+            front_sector_size = int(num_points / 8)  # Front spans 1/8 of the scan points at start and end
+            
+            # Front sector is split between beginning and end of array
+            front_indices = list(range(0, front_sector_size)) + list(range(num_points - front_sector_size, num_points))
+            left_indices = list(range(num_points // 4 - front_sector_size, num_points // 4 + front_sector_size))
+            right_indices = list(range(3 * num_points // 4 - front_sector_size, 3 * num_points // 4 + front_sector_size))
             
             # Get minimum distance in each sector
             front_dist = np.min(self.laser_ranges[front_indices]) if front_indices else 10.0
@@ -148,15 +182,20 @@ class SimpleTurtlebotNavigator:
         
         return goal
 
-    def send_goal(self, x, y, yaw):
-        if not self.use_move_base:
+    def send_goal(self, x, y, yaw, fallback=False):
+        # Allow sending goals even if use_move_base is False when using fallback mode
+        if not self.move_base_available:
+            rospy.logwarn("move_base action server not available. Cannot send goal.")
+            return
+            
+        if not self.use_move_base and not fallback:
             rospy.logwarn("move_base is not enabled. Cannot send goal.")
             return
             
         goal = self.create_move_base_goal(x, y, yaw)
         self.goal_reached = False
         
-        rospy.loginfo(f"Sending goal: x={x:.2f}, y={y:.2f}, yaw={yaw:.2f}")
+        rospy.loginfo(f"Sending goal to move_base: x={x:.2f}, y={y:.2f}, yaw={yaw:.2f}")
         self.move_base_client.send_goal(goal)
         self.navigation_active = True
 
@@ -197,6 +236,51 @@ class SimpleTurtlebotNavigator:
         rospy.loginfo("Navigation complete. Node will remain active but idle.")
         rospy.spin()
 
+    def check_if_stuck(self):
+        """Check if the robot has been not moving for too long"""
+        if not self.is_stuck:
+            time_since_movement = (rospy.Time.now() - self.last_significant_movement_time).to_sec()
+            if time_since_movement > self.stuck_timeout:
+                rospy.logwarn(f"Robot appears to be STUCK! No significant movement for {time_since_movement:.1f} seconds")
+                self.is_stuck = True
+                return True
+        return self.is_stuck
+    
+    def try_simple_recovery(self):
+        """Try a simple recovery before resorting to move_base"""
+        rospy.loginfo("Attempting simple recovery maneuver")
+        
+        # First stop the robot
+        stop_cmd = Twist()
+        self.cmd_vel_pub.publish(stop_cmd)
+        rospy.sleep(0.5)
+        
+        # Back up slightly
+        backup_cmd = Twist()
+        backup_cmd.linear.x = -0.1
+        for i in range(10):  # Back up for 2 seconds
+            self.cmd_vel_pub.publish(backup_cmd)
+            rospy.sleep(0.2)
+        
+        # Stop again
+        self.cmd_vel_pub.publish(stop_cmd)
+        rospy.sleep(0.5)
+        
+        # Turn in place
+        turn_cmd = Twist()
+        turn_cmd.angular.z = self.angular_speed * (-1 if self.is_obstacle_left else 1)
+        for i in range(15):  # Turn for 3 seconds
+            self.cmd_vel_pub.publish(turn_cmd)
+            rospy.sleep(0.2)
+        
+        # Stop after maneuver
+        self.cmd_vel_pub.publish(stop_cmd)
+        
+        # Reset stuck detection timer
+        self.last_significant_movement_time = rospy.Time.now()
+        self.is_stuck = False
+        rospy.loginfo("Recovery maneuver complete")
+    
     def manual_obstacle_avoidance(self):
         """Simple manual obstacle avoidance: move straight when clear, turn when obstacles detected"""
         rospy.loginfo("Starting simple manual obstacle avoidance...")
@@ -205,6 +289,12 @@ class SimpleTurtlebotNavigator:
         current_goal_index = 0
         current_goal = self.goals[current_goal_index]
         heading_to_goal = False
+        recovery_attempted = False
+        
+        # Initialize last position for stuck detection
+        self.last_position['x'] = self.position['x']
+        self.last_position['y'] = self.position['y']
+        self.last_significant_movement_time = rospy.Time.now()
         
         while not rospy.is_shutdown():
             # Create empty velocity command
@@ -213,6 +303,7 @@ class SimpleTurtlebotNavigator:
             # Get current goal
             current_goal = self.goals[current_goal_index]
             goal_x, goal_y = current_goal['x'], current_goal['y']
+            goal_yaw = current_goal['yaw']
             
             # Calculate distance to goal
             distance_to_goal = sqrt((goal_x - self.position['x'])**2 + 
@@ -225,11 +316,52 @@ class SimpleTurtlebotNavigator:
             # Calculate angle difference (how much we need to turn to face the goal)
             angle_diff = self.normalize_angle(angle_to_goal - self.orientation['yaw'])
             
+            # Check if we're stuck and should try recovery
+            if self.check_if_stuck():
+                if not recovery_attempted:
+                    # Try simple recovery maneuver first
+                    self.try_simple_recovery()
+                    recovery_attempted = True
+                    heading_to_goal = False  # Reset state after recovery
+                    self.turning = False
+                    continue
+                elif self.move_base_available and not self.using_move_base_fallback:
+                    # If simple recovery didn't work, switch to move_base
+                    rospy.logwarn("Switching to move_base for navigation as robot appears stuck!")
+                    self.using_move_base_fallback = True
+                    
+                    # Send the current goal to move_base
+                    self.send_goal(goal_x, goal_y, goal_yaw, fallback=True)
+                    
+                    # Wait for move_base to take over
+                    rospy.sleep(0.5)
+                    continue
+            
+            # If we're using move_base fallback, check if goal is reached
+            if self.using_move_base_fallback:
+                if self.goal_reached:
+                    rospy.loginfo("move_base fallback reached the goal successfully!")
+                    self.goal_reached = False
+                    self.using_move_base_fallback = False
+                    current_goal_index = (current_goal_index + 1) % len(self.goals)
+                    heading_to_goal = False
+                    recovery_attempted = False
+                    
+                    # Reset stuck detection
+                    self.is_stuck = False
+                    self.last_significant_movement_time = rospy.Time.now()
+                continue  # Skip manual control while move_base is active
+            
             # Check if goal is reached
             if distance_to_goal < self.goal_tolerance and not self.turning:
                 rospy.loginfo(f"Goal {current_goal_index + 1} reached! Distance: {distance_to_goal:.2f}m")
                 current_goal_index = (current_goal_index + 1) % len(self.goals)
                 heading_to_goal = False
+                recovery_attempted = False
+                
+                # Reset stuck detection when reaching a goal
+                self.is_stuck = False
+                self.last_significant_movement_time = rospy.Time.now()
                 
                 # Stop briefly at goal
                 cmd_vel.linear.x = 0.0
@@ -254,8 +386,8 @@ class SimpleTurtlebotNavigator:
                         self.turn_direction = 1   # Turn left
                         rospy.loginfo("Obstacle ahead! Turning left.")
                     else:
-                        # If both sides have obstacles or are clear, choose randomly
-                        # but with preference to the side closest to goal direction
+                        # If both sides have obstacles or are clear, choose direction
+                        # based on goal direction
                         if angle_diff > 0:
                             self.turn_direction = 1  # Turn left
                         else:
@@ -329,6 +461,11 @@ class SimpleTurtlebotNavigator:
             rospy.logerr(f"Navigation error: {e}")
             # Emergency stop
             self.cmd_vel_pub.publish(Twist())
+            
+            # If an error occurred while using move_base fallback, reset the flag
+            if self.using_move_base_fallback:
+                self.using_move_base_fallback = False
+                self.move_base_client.cancel_all_goals()
 
 if __name__ == '__main__':
     try:
