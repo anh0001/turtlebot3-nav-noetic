@@ -304,6 +304,12 @@ class TurtlebotNavigator:
         rospy.loginfo("Starting enhanced manual obstacle avoidance...")
         last_time = rospy.Time.now()
         
+        # State management to ensure complete rotations
+        rotating_to_clear_path = False
+        rotation_start_time = None
+        rotation_direction = 0
+        rotation_duration = 0
+        
         while not rospy.is_shutdown():
             current_time = rospy.Time.now()
             dt = (current_time - last_time).to_sec()
@@ -344,6 +350,7 @@ class TurtlebotNavigator:
                 self.recovery_mode = True
                 self.recovery_start_time = rospy.Time.now()
                 self.recovery_strategy = (self.recovery_strategy + 1) % 4  # Cycle through strategies
+                rotating_to_clear_path = False  # Reset rotation state
                 
             # Check if we're in recovery mode
             if self.recovery_mode:
@@ -352,6 +359,7 @@ class TurtlebotNavigator:
                 if rospy.Time.now() - self.recovery_start_time > rospy.Duration(self.recovery_duration):
                     rospy.loginfo("Exiting recovery mode")
                     self.recovery_mode = False
+                    rotating_to_clear_path = False  # Reset rotation state
             
             # EMERGENCY STOP - if any obstacle is extremely close (< 0.15m)
             elif self.min_distance < 0.15:
@@ -364,12 +372,14 @@ class TurtlebotNavigator:
                 self.recovery_mode = True
                 self.recovery_start_time = rospy.Time.now()
                 cmd_vel = self.execute_recovery_behavior()
+                rotating_to_clear_path = False  # Reset rotation state
             
             # Goal reached check
             elif distance_to_goal < self.goal_tolerance:
                 # Goal reached, move to next goal
                 rospy.loginfo(f"Goal {self.current_goal_index + 1} reached!")
                 self.current_goal_index += 1
+                rotating_to_clear_path = False  # Reset rotation state
                 
                 # Check if all goals have been reached
                 if self.current_goal_index >= len(self.goals):
@@ -387,81 +397,107 @@ class TurtlebotNavigator:
                 self.cmd_vel_pub.publish(cmd_vel)
                 rospy.sleep(1.0)  # Pause for 1 second
             
-            # Critical obstacle detection - enter recovery mode
-            elif min(self.obstacle_sectors['front'], 
-                    self.obstacle_sectors['front_left'], 
-                    self.obstacle_sectors['front_right']) < self.danger_threshold:
-                rospy.logwarn("Critical obstacle detected ahead! Entering recovery mode...")
-                self.recovery_mode = True
-                self.recovery_start_time = rospy.Time.now()
-                cmd_vel = self.execute_recovery_behavior()
-            
-            # Regular obstacle avoidance - front obstacle
-            elif self.obstacle_sectors['front'] < self.obstacle_threshold:
-                # Front obstacle detected, need to avoid
-                rospy.loginfo("Obstacle detected directly in front! Stopping forward motion...")
+            # If we're currently in a rotation-to-clear-path state
+            elif rotating_to_clear_path:
+                # Pure rotation - no linear movement
+                cmd_vel.linear.x = 0.0
+                cmd_vel.angular.z = rotation_direction * self.angular_speed
                 
-                # First, stop forward motion
+                # Check if we've been rotating long enough
+                current_rotation_time = (rospy.Time.now() - rotation_start_time).to_sec()
+                
+                # Check if rotation is complete or if we now have a clear path in front
+                if (current_rotation_time >= rotation_duration or 
+                    self.obstacle_sectors['front'] > self.obstacle_threshold):
+                    rospy.loginfo(f"Rotation complete or clear path found after {current_rotation_time:.1f}s of rotation")
+                    rotating_to_clear_path = False  # Exit rotation state
+                else:
+                    rospy.loginfo(f"Continuing rotation to find clear path: {current_rotation_time:.1f}/{rotation_duration:.1f}s")
+            
+            # Critical obstacle detection - front obstacle detection
+            elif self.obstacle_sectors['front'] < self.obstacle_threshold:
+                # Front obstacle detected! Stop moving forward and rotate in place
+                rospy.loginfo("Obstacle detected in front! Starting pure rotation to clear path...")
+                
+                # Start rotating in place (zero linear velocity)
                 cmd_vel.linear.x = 0.0
                 
-                # Determine which way to turn based on front-left/front-right sector distances
-                if self.obstacle_sectors['front_left'] > self.obstacle_sectors['front_right']:
-                    # More space on the front-left, turn left
-                    cmd_vel.angular.z = self.angular_speed
-                    rospy.loginfo("Turning left to avoid obstacle")
+                # Determine rotation direction based on which side has more space
+                if self.obstacle_sectors['left'] > self.obstacle_sectors['right']:
+                    rotation_direction = 1.0  # Rotate left (positive angular velocity)
+                    rospy.loginfo("More space on left - rotating counterclockwise")
                 else:
-                    # More space on the front-right, turn right
-                    cmd_vel.angular.z = -self.angular_speed
-                    rospy.loginfo("Turning right to avoid obstacle")
+                    rotation_direction = -1.0  # Rotate right (negative angular velocity)
+                    rospy.loginfo("More space on right - rotating clockwise")
+                
+                cmd_vel.angular.z = rotation_direction * self.angular_speed
+                
+                # Set up the rotation state
+                rotating_to_clear_path = True
+                rotation_start_time = rospy.Time.now()
+                
+                # Set a minimum rotation duration to prevent oscillation
+                # (longer rotation for more severe obstacle detection)
+                closeness_factor = 1.0 - (self.obstacle_sectors['front'] / self.obstacle_threshold)
+                rotation_duration = 1.0 + (2.0 * closeness_factor)  # Between 1-3 seconds based on obstacle closeness
+                
+                rospy.loginfo(f"Beginning {rotation_duration:.1f}s rotation to find clear path")
             
-            # Regular obstacle avoidance - front-left or front-right obstacle
-            elif min(self.obstacle_sectors['front_left'], self.obstacle_sectors['front_right']) < self.obstacle_threshold:
-                # Obstacle in forward arc but not directly in front
-                rospy.loginfo("Obstacle detected in forward arc! Adjusting course...")
+            # Side obstacle avoidance - also rotate in place if too close to side obstacles
+            elif min(self.obstacle_sectors['front_left'], self.obstacle_sectors['front_right']) < self.obstacle_threshold * 0.7:
+                # Obstacle in forward arc but not directly in front - still rotate in place
+                rospy.loginfo("Obstacle detected in forward arc! Rotating in place...")
+                
+                cmd_vel.linear.x = 0.0  # No forward movement
                 
                 if self.obstacle_sectors['front_left'] < self.obstacle_sectors['front_right']:
-                    # Obstacle in front-left sector, turn right
-                    cmd_vel.angular.z = -self.angular_speed * 0.8
-                    rospy.loginfo("Turning right to avoid front-left obstacle")
+                    # Obstacle in front-left, rotate right
+                    rotation_direction = -1.0
+                    rospy.loginfo("Obstacle in front-left - rotating clockwise")
                 else:
-                    # Obstacle in front-right sector, turn left
-                    cmd_vel.angular.z = self.angular_speed * 0.8
-                    rospy.loginfo("Turning left to avoid front-right obstacle")
+                    # Obstacle in front-right, rotate left
+                    rotation_direction = 1.0
+                    rospy.loginfo("Obstacle in front-right - rotating counterclockwise")
                 
-                # Slow forward movement
-                cmd_vel.linear.x = self.linear_speed * 0.3
+                cmd_vel.angular.z = rotation_direction * self.angular_speed
+                
+                # Set up the rotation state with a shorter duration
+                rotating_to_clear_path = True
+                rotation_start_time = rospy.Time.now()
+                rotation_duration = 1.0  # Shorter rotation for side obstacles
+                
+                rospy.loginfo("Beginning 1.0s rotation to clear side obstacles")
             
-            # Side obstacle avoidance - make more aggressive adjustments if obstacles are close on sides
+            # Side obstacle avoidance - slight adjustments when clear ahead but obstacles on sides
             elif min(self.obstacle_sectors['left'], self.obstacle_sectors['right']) < self.obstacle_threshold:
-                # Side obstacle detected
+                # Side obstacle detected but path ahead is clear
                 if self.obstacle_sectors['left'] < self.obstacle_sectors['right']:
-                    # Obstacle on left, drift right more aggressively
-                    cmd_vel.angular.z = -self.angular_speed * 0.5
-                    rospy.loginfo("Side obstacle on left, turning right")
+                    # Obstacle on left, slight right drift but keep moving
+                    cmd_vel.angular.z = -0.3
+                    rospy.loginfo("Side obstacle on left, drifting right")
                 else:
-                    # Obstacle on right, drift left more aggressively
-                    cmd_vel.angular.z = self.angular_speed * 0.5
-                    rospy.loginfo("Side obstacle on right, turning left")
+                    # Obstacle on right, slight left drift but keep moving
+                    cmd_vel.angular.z = 0.3
+                    rospy.loginfo("Side obstacle on right, drifting left")
                 
-                # Continue forward movement if path is clear ahead
-                if self.obstacle_sectors['front'] > self.obstacle_threshold:
-                    cmd_vel.linear.x = self.linear_speed * 0.5  # Half speed
+                # Continue forward movement at reduced speed
+                cmd_vel.linear.x = self.linear_speed * 0.7
             
             # No obstacles, head towards the goal
             else:
                 if abs(angle_diff) > 0.3:
-                    # Turn towards goal
-                    cmd_vel.angular.z = 0.5 * angle_diff  # More aggressive turning
+                    # Large angle difference to goal - rotate in place first
+                    cmd_vel.linear.x = 0.0  # No forward movement during significant rotation
+                    cmd_vel.angular.z = 0.6 * angle_diff  # Proportional rotation
+                    
                     # Limit angular velocity
                     cmd_vel.angular.z = max(-self.angular_speed, min(self.angular_speed, cmd_vel.angular.z))
-                    
-                    # Move slower when turning
-                    turn_ratio = 1.0 - min(1.0, abs(angle_diff) / pi)
-                    cmd_vel.linear.x = self.linear_speed * turn_ratio
+                    rospy.loginfo(f"Aligning to goal direction: angle_diff={angle_diff:.2f}")
                 else:
-                    # Move forward
+                    # Aligned with goal direction - move forward
                     cmd_vel.linear.x = self.linear_speed
-                    cmd_vel.angular.z = 0.2 * angle_diff  # More aggressive correction
+                    cmd_vel.angular.z = 0.2 * angle_diff  # Small correction while moving
+                    rospy.loginfo("Moving toward goal with minor course correction")
             
             # Store command for stuck detection
             self.last_cmd_vel = cmd_vel
@@ -491,83 +527,49 @@ class TurtlebotNavigator:
         if self.is_stuck:
             # Use a cycling strategy to avoid getting permanently stuck
             if self.recovery_strategy == 0:
-                # Strategy 1: Aggressive backup and random turn
-                cmd_vel.linear.x = -0.15  # More aggressive backup
-                # Random turn direction to escape potential local minima
+                # Strategy 1: Just rotate in place (no linear movement)
+                cmd_vel.linear.x = 0.0
+                # Choose random direction to avoid repeatedly trying the same approach
                 turn_direction = 1 if random.random() > 0.5 else -1
-                cmd_vel.angular.z = turn_direction * self.angular_speed * 0.8
-                rospy.logwarn("Stuck Recovery: Aggressive backup with random turn")
+                cmd_vel.angular.z = turn_direction * self.angular_speed
+                rospy.logwarn("Stuck Recovery: Pure rotation to find clear path")
                 
             elif self.recovery_strategy == 1:
-                # Strategy 2: Rotate in place for a more complete view
-                cmd_vel.linear.x = 0.0
-                cmd_vel.angular.z = self.angular_speed * 1.2  # Faster rotation
-                rospy.logwarn("Stuck Recovery: Fast rotation to scan environment")
+                # Strategy 2: Aggressive backup with no turning
+                cmd_vel.linear.x = -0.15
+                cmd_vel.angular.z = 0.0
+                rospy.logwarn("Stuck Recovery: Pure backward movement")
                 
             elif self.recovery_strategy == 2:
-                # Strategy 3: Wiggle - alternating left/right turns while backing up
+                # Strategy 3: Backup with turn
                 cmd_vel.linear.x = -0.12
-                # Use time-based oscillation for the wiggle
-                oscillation = sin(time.time() * 5.0)  # 5.0 controls the frequency
-                cmd_vel.angular.z = oscillation * self.angular_speed
-                rospy.logwarn("Stuck Recovery: Wiggle backing up")
+                # Random direction
+                turn_direction = 1 if random.random() > 0.5 else -1
+                cmd_vel.angular.z = turn_direction * (self.angular_speed * 0.7)
+                rospy.logwarn(f"Stuck Recovery: Backing up with {'left' if turn_direction > 0 else 'right'} turn")
                 
             else:
-                # Strategy 4: Forward burst with random direction (last resort)
-                # This is risky but sometimes necessary to escape
-                cmd_vel.linear.x = 0.15  # Forward burst
-                cmd_vel.angular.z = (random.random() - 0.5) * self.angular_speed * 2.0
-                rospy.logwarn("Stuck Recovery: Forward burst with random direction (risky)")
+                # Strategy 4: "Wiggle" rotation - oscillating angular velocity
+                cmd_vel.linear.x = 0.0
+                oscillation = sin(time.time() * 3.0) 
+                cmd_vel.angular.z = oscillation * self.angular_speed * 1.2
+                rospy.logwarn("Stuck Recovery: Oscillating rotation to escape")
                 
             return cmd_vel
         
         # Normal recovery (not stuck, but obstacle detected)
-        # Determine recovery strategy based on obstacle configuration
-        if self.obstacle_sectors['front'] < self.danger_threshold:
-            # Obstacle very close in front - back up more aggressively
-            cmd_vel.linear.x = -0.15  # Faster backward movement
-            
-            # Pick the direction with more space to turn while backing up
-            if self.obstacle_sectors['front_left'] > self.obstacle_sectors['front_right']:
-                cmd_vel.angular.z = self.angular_speed * 0.7  # More aggressive turn while backing up
-                rospy.loginfo("Recovery: Backing up and turning left")
-            else:
-                cmd_vel.angular.z = -self.angular_speed * 0.7
-                rospy.loginfo("Recovery: Backing up and turning right")
-                
-        elif min(self.obstacle_sectors['front_left'], self.obstacle_sectors['front_right']) < self.danger_threshold:
-            # Obstacle in forward arc - rotate away from it
-            cmd_vel.linear.x = -0.05  # Slight backup while rotating
-            
-            if self.obstacle_sectors['front_left'] < self.obstacle_sectors['front_right']:
-                # Obstacle in front-left, turn right
-                cmd_vel.angular.z = -self.angular_speed
-                rospy.loginfo("Recovery: Backing slightly and rotating right")
-            else:
-                # Obstacle in front-right, turn left
-                cmd_vel.angular.z = self.angular_speed
-                rospy.loginfo("Recovery: Backing slightly and rotating left")
-                
-        elif min(self.obstacle_sectors['left'], self.obstacle_sectors['right']) < self.danger_threshold:
-            # Tight space on sides - rotate toward the more open direction
-            cmd_vel.linear.x = 0.0
-            
-            if self.obstacle_sectors['left'] > self.obstacle_sectors['right']:
-                cmd_vel.angular.z = self.angular_speed  # Rotate left
-                rospy.loginfo("Recovery: Rotating left in place")
-            else:
-                cmd_vel.angular.z = -self.angular_speed  # Rotate right
-                rospy.loginfo("Recovery: Rotating right in place")
+        # For normal recovery, prioritize in-place rotation
+        cmd_vel.linear.x = 0.0  # No forward/backward movement
+        
+        # Determine which way has more space
+        if self.obstacle_sectors['left'] > self.obstacle_sectors['right']:
+            # More space to the left
+            cmd_vel.angular.z = self.angular_speed  # Pure left rotation
+            rospy.loginfo("Recovery: Pure left rotation to find clear path")
         else:
-            # General recovery - do a full spin with randomized direction
-            cmd_vel.linear.x = 0.0
-            # Random direction to avoid getting stuck in back-and-forth motions
-            if random.random() > 0.5:
-                cmd_vel.angular.z = self.angular_speed
-                rospy.loginfo("Recovery: Scanning by rotating left")
-            else:
-                cmd_vel.angular.z = -self.angular_speed
-                rospy.loginfo("Recovery: Scanning by rotating right")
+            # More space to the right
+            cmd_vel.angular.z = -self.angular_speed  # Pure right rotation
+            rospy.loginfo("Recovery: Pure right rotation to find clear path")
             
         return cmd_vel
 
