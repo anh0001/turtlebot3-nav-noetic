@@ -63,6 +63,11 @@ A ROS Noetic package for autonomous navigation of the Turtlebot3 robot in a Gaze
    docker-compose up
    ```
 
+   ```bash
+   # Optionally, run the provided script to start your Docker environment:
+   ./start_docker_env.sh
+   ```
+
 4. Access the environment via noVNC:
    - Open a web browser and navigate to `http://localhost:6080`
 
@@ -103,7 +108,7 @@ This task demonstrates controlling the Turtlebot3 in Gazebo, keeping it moving w
    - Creating autonomous patrol behaviors with multiple waypoints
    - Using move_base for path planning while patrolling
    - Implementing loop behaviors with configurable wait times
-   - Handling goal completion and failure recovery
+   - Handling goal completion
    
    [![Watch the video](https://img.youtube.com/vi/WtzLR8X_0VQ/0.jpg)](   https://www.youtube.com/watch?v=WtzLR8X_0VQ)
 
@@ -149,26 +154,55 @@ This task demonstrates a unique skill in robot development: creating a fully doc
    - The `patrol.py` script shows how to create autonomous patrol behaviors
    - These scripts can be easily extended or modified to create new robot behaviors
 
-4. Running Predefined Goals with Custom Obstacle Avoidance:
+4. Running Predefined Goals using move_base:
    ```bash
    roslaunch turtlebot3-nav-noetic turtlebot3_predefined_goals.launch
    ```
    
-   This launches the simulation with a custom obstacle avoidance algorithm that demonstrates how to:
-   - Set predefined goal locations
-   - Detect obstacles using laser scan data
-   - Navigate safely to goals while handling edge cases
+   This launch file runs the obstacle_avoidance.py script configured to use move_base for navigation to predefined goals. Key parameters include:
    
-   This launch file is particularly unique because:
-   - It implements its own obstacle detection and control logic
-   - It provides a fallback mechanism if move_base fails
-   - It demonstrates direct control of robot velocity commands
-   - It showcases custom parameter tuning for different environments
+   - use_move_base: Set to true, meaning it relies on move_base for path planning
+   - goal_tolerance: Set to 0.3m, defining how close the robot needs to get to consider a goal reached
+   - obstacle_threshold: Set to 0.3m, determining the distance at which obstacles are detected
+   - linear_speed: Set to 0.2 m/s, controlling the maximum forward velocity
+   - angular_speed: Set to 0.5 rad/s, controlling the maximum turning speed
    
-   [![Watch the video](https://img.youtube.com/vi/ub2nlCgUJvM/0.jpg)](   https://www.youtube.com/watch?v=ub2nlCgUJvM)
+   These parameters are important because they:
+   - Allow fine-tuning of navigation behavior without modifying code
+   - Enable adaptation to different environments (open spaces vs. cluttered areas)
+   - Control how cautiously the robot approaches obstacles
+   - Balance speed and safety during navigation
+   - Can be adjusted for different Turtlebot3 models (Burger vs. Waffle)
+   
+   While this launch file uses move_base, it demonstrates how to provide an automated goal sequence with properly tuned parameters for reliable navigation.
+   
+   [![Watch the video](https://img.youtube.com/vi/ub2nlCgUJvM/0.jpg)](https://www.youtube.com/watch?v=ub2nlCgUJvM)
 
-   **[Video Demo: Predefined Goals Navigation]** - *This video demonstrates the robot navigating to predefined goal locations using the custom navigation system, highlighting the specialized obstacle avoidance algorithm in action.*
+   **[Video Demo: Predefined Goals Navigation]** - *This video demonstrates the robot navigating to predefined goal locations using move_base with tuned parameters for optimal performance.*
+
+5. Custom Avoidance Navigation:
+   ```bash
+   roslaunch turtlebot3-nav-noetic turtlebot3_custom_avoidance.launch
+   ```
+
+   This launch file provides an alternative approach to navigation with direct velocity control and simplified obstacle avoidance:
+   - Uses pure velocity control without relying on move_base by default
+   - Implements custom stuck detection with a 3-second timeout
+   - Includes recovery behaviors when the robot gets stuck
+   - Provides fallback to move_base if necessary
+   - Offers simpler, more direct control for educational purposes
    
+   While the movement may not be as smooth as move_base navigation, this approach demonstrates:
+   - How to implement basic obstacle avoidance from scratch
+   - Real-time velocity control strategies
+   - Recovery behavior implementation
+   - Fallback mechanisms between different navigation approaches
+   - A simplified navigation stack that's easier to understand and modify
+
+   [![Watch the video](https://img.youtube.com/vi/wqKM9-Zm-fs/0.jpg)](https://www.youtube.com/watch?v=wqKM9-Zm-fs)
+
+   **[Video Demo: Custom Avoidance Navigation]** - *This video demonstrates the robot using direct velocity control for navigation without relying on move_base, showing the custom stuck detection, recovery behaviors, and simplified obstacle avoidance approach in action.*
+
 ### Running the Dockerized Simulation
 
 1. Start the Docker container:
@@ -196,6 +230,9 @@ This task demonstrates a unique skill in robot development: creating a fully doc
    
    # OR for predefined goals with obstacle avoidance
    roslaunch turtlebot3-nav-noetic turtlebot3_predefined_goals.launch
+   
+   # OR for custom avoidance without move_base
+   roslaunch turtlebot3-nav-noetic turtlebot3_custom_avoidance.launch
    ```
 
 ### Benefits and Applications
@@ -228,7 +265,8 @@ The navigation parameters can be adjusted in the config files:
 - `launch/`: Launch files for the simulation and navigation
   - `turtlebot3_master.launch`: Main launch file that starts both simulation and navigation
   - `turtlebot3_patrol.launch`: Launches patrol behavior
-  - `turtlebot3_predefined_goals.launch`: Launches custom obstacle avoidance with predefined goals
+  - `turtlebot3_predefined_goals.launch`: Launches navigation with predefined goals
+  - `turtlebot3_custom_avoidance.launch`: Launches custom avoidance without using move_base
 - `config/`: Configuration files for move_base and costmaps
 - `scripts/`: Python scripts for navigation behaviors
   - `obstacle_avoidance.py`: Custom obstacle avoidance implementation
@@ -267,6 +305,7 @@ The navigation parameters can be adjusted in the config files:
 4. **Navigation problems**
    - If the robot cannot plan a path, try adjusting the costmap parameters
    - If move_base fails to start, check if all dependencies are installed
+   - If using custom avoidance and the robot gets stuck, try adjusting the `obstacle_threshold` or `stuck_timeout` parameters
 
 ## License
 
