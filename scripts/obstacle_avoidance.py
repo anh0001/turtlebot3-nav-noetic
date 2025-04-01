@@ -19,7 +19,7 @@ class TurtlebotNavigator:
         # Parameters (can be set from launch file)
         self.use_move_base = rospy.get_param('~use_move_base', True)  # Use move_base by default
         self.goal_tolerance = rospy.get_param('~goal_tolerance', 0.3)  # Meters
-        self.obstacle_threshold = rospy.get_param('~obstacle_threshold', 0.5)  # Meters
+        self.obstacle_threshold = rospy.get_param('~obstacle_threshold', 0.2)  # Meters
         self.linear_speed = rospy.get_param('~linear_speed', 0.2)  # m/s
         self.angular_speed = rospy.get_param('~angular_speed', 0.5)  # rad/s
         
