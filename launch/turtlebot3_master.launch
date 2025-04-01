@@ -47,13 +47,4 @@
       <param name="publication_duration" value="5.0"/>
     </node>
   </group>
-  
-  <!-- Launch the obstacle avoidance node
-  <node pkg="turtlebot3-nav-noetic" type="obstacle_avoidance.py" name="obstacle_avoidance" output="screen">
-    <param name="use_move_base" value="true"/>
-    <param name="goal_tolerance" value="0.3"/>
-    <param name="obstacle_threshold" value="0.2"/>
-    <param name="linear_speed" value="0.2"/>
-    <param name="angular_speed" value="0.5"/>
-  </node> -->
 </launch>

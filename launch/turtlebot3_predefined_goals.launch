@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Arguments -->
+  <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>
+  
+  <!-- Centralized initial pose parameters -->
+  <arg name="initial_pose_x" default="-2.0"/>
+  <arg name="initial_pose_y" default="0.0"/>
+  <arg name="initial_pose_z" default="0.0"/>
+  <arg name="initial_pose_a" default="0.0"/> <!-- yaw in radians -->
+  
+  <!-- Other common arguments -->
+  <arg name="open_rviz" default="true"/>
+  <arg name="move_forward_only" default="false"/>
+  <arg name="gui" default="true"/>
+  <arg name="world_name" default="turtlebot3_world"/>
+  <arg name="use_initial_pose_publisher" default="true" doc="Use dedicated node to publish initial pose"/>
+
+  <!-- Launch the master launch file that includes simulation, navigation, and initial pose publisher -->
+  <include file="$(find turtlebot3-nav-noetic)/launch/turtlebot3_master.launch">
+    <arg name="model" value="$(arg model)"/>
+    <arg name="initial_pose_x" value="$(arg initial_pose_x)"/>
+    <arg name="initial_pose_y" value="$(arg initial_pose_y)"/>
+    <arg name="initial_pose_z" value="$(arg initial_pose_z)"/>
+    <arg name="initial_pose_a" value="$(arg initial_pose_a)"/>
+    <arg name="open_rviz" value="$(arg open_rviz)"/>
+    <arg name="move_forward_only" value="$(arg move_forward_only)"/>
+    <arg name="gui" value="$(arg gui)"/>
+    <arg name="world_name" value="$(arg world_name)"/>
+    <arg name="use_initial_pose_publisher" value="$(arg use_initial_pose_publisher)"/>
+  </include>
+  
+  <!-- Launch the obstacle avoidance node -->
+  <node pkg="turtlebot3-nav-noetic" type="obstacle_avoidance.py" name="obstacle_avoidance" output="screen">
+    <param name="use_move_base" value="true"/>
+    <param name="goal_tolerance" value="0.3"/>
+    <param name="obstacle_threshold" value="0.2"/>
+    <param name="linear_speed" value="0.2"/>
+    <param name="angular_speed" value="0.5"/>
+  </node>
+</launch>

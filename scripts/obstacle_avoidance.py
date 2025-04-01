@@ -31,6 +31,7 @@ class TurtlebotNavigator:
         self.obstacle_direction = 0.0
         self.goal_reached = False
         self.navigation_active = False
+        self.goals_completed = False  # New flag to track if all goals are completed
         
         # TF Listener for transformations
         self.tf_listener = tf.TransformListener()
@@ -65,7 +66,7 @@ class TurtlebotNavigator:
         # Define patrol goals in map frame
         # These should be adjusted to match your map
         self.goals = [
-            {'x': 0.5, 'y': 0.0, 'yaw': 0.0},
+            {'x': 0.5, 'y': 0.5, 'yaw': 0.0},
             {'x': 1.5, 'y': -0.5, 'yaw': pi/2},
             {'x': -0.5, 'y': 1.5, 'yaw': pi},
             {'x': 0.5, 'y': -1.5, 'yaw': -pi/2}
@@ -153,9 +154,23 @@ class TurtlebotNavigator:
         while not rospy.is_shutdown():
             if self.goal_reached:
                 # Move to the next goal
-                self.current_goal_index = (self.current_goal_index + 1) % len(self.goals)
-                current_goal = self.goals[self.current_goal_index]
-                self.send_goal(current_goal['x'], current_goal['y'], current_goal['yaw'])
+                self.current_goal_index += 1
+                
+                # Check if all goals have been reached
+                if self.current_goal_index >= len(self.goals):
+                    rospy.loginfo("All goals have been reached! Navigation complete.")
+                    self.goals_completed = True
+                    # Stop the robot by sending a zero velocity command
+                    self.cmd_vel_pub.publish(Twist())
+                    # Cancel any active goals
+                    if self.navigation_active:
+                        self.move_base_client.cancel_all_goals()
+                        self.navigation_active = False
+                    break  # Exit the navigation loop
+                else:
+                    # Send the next goal
+                    current_goal = self.goals[self.current_goal_index]
+                    self.send_goal(current_goal['x'], current_goal['y'], current_goal['yaw'])
             
             # Show current status
             if self.navigation_active:
@@ -165,6 +180,10 @@ class TurtlebotNavigator:
                             f"Nearest obstacle: {distance_to_obstacle}")
             
             self.rate.sleep()
+        
+        # Keep the node running but inactive after completing all goals
+        rospy.loginfo("Navigation complete. Node will remain active but idle.")
+        rospy.spin()
 
     def manual_obstacle_avoidance(self):
         """
@@ -174,6 +193,12 @@ class TurtlebotNavigator:
         rospy.loginfo("Starting manual obstacle avoidance...")
         
         while not rospy.is_shutdown():
+            # Check if all goals have been completed
+            if self.goals_completed:
+                # Just sleep to keep the node running but not doing anything
+                self.rate.sleep()
+                continue
+                
             cmd_vel = Twist()
             
             # Get current goal
@@ -200,7 +225,17 @@ class TurtlebotNavigator:
             if distance_to_goal < self.goal_tolerance:
                 # Goal reached, move to next goal
                 rospy.loginfo(f"Goal {self.current_goal_index + 1} reached!")
-                self.current_goal_index = (self.current_goal_index + 1) % len(self.goals)
+                self.current_goal_index += 1
+                
+                # Check if all goals have been reached
+                if self.current_goal_index >= len(self.goals):
+                    rospy.loginfo("All goals have been reached! Navigation complete.")
+                    self.goals_completed = True
+                    # Stop the robot
+                    cmd_vel.linear.x = 0.0
+                    cmd_vel.angular.z = 0.0
+                    self.cmd_vel_pub.publish(cmd_vel)
+                    continue  # Continue the loop but with goals_completed = True
                 
                 # Brief stop
                 cmd_vel.linear.x = 0.0
@@ -247,6 +282,10 @@ class TurtlebotNavigator:
                          f"Obstacle dist: {self.min_distance:.2f}")
             
             self.rate.sleep()
+        
+        # Keep the node running but inactive after completing all goals
+        rospy.loginfo("Navigation complete. Node will remain active but idle.")
+        rospy.spin()
 
     def run(self):
         """Main entry point that decides which navigation method to use"""
