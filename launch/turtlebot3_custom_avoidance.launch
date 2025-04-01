@@ -30,13 +30,28 @@
     <arg name="use_initial_pose_publisher" value="$(arg use_initial_pose_publisher)"/>
   </include>
   
-  <!-- Launch the custom obstacle avoidance node -->
+  <!-- Launch the custom obstacle avoidance node with enhanced parameters -->
   <node pkg="turtlebot3-nav-noetic" type="obstacle_avoidance.py" name="obstacle_avoidance" output="screen">
+    <!-- Basic configuration -->
     <param name="use_move_base" value="false"/>
-    <param name="obstacle_threshold" value="0.3"/>
-    <param name="danger_threshold" value="0.2"/>
+    <param name="goal_tolerance" value="0.3"/>
+    
+    <!-- Distance thresholds (in meters) -->
+    <param name="obstacle_threshold" value="0.4"/>
+    <param name="danger_threshold" value="0.25"/>
+    <param name="critical_threshold" value="0.15"/>
+    <param name="slow_zone_distance" value="0.7"/>
+    
+    <!-- Movement speeds -->
     <param name="linear_speed" value="0.2"/>
-    <param name="angular_speed" value="0.6"/>
+    <param name="angular_speed" value="0.7"/>
+    
+    <!-- Rotation control parameters -->
+    <param name="rotation_cooldown" value="1.0"/>
+    <param name="rotation_precision" value="0.1"/>
+    
+    <!-- Scan configuration -->
+    <param name="scan_angle_front" value="1.57"/>  <!-- pi/2 radians (90 degrees) -->
   </node>
 
 </launch>
