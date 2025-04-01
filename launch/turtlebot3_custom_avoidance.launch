@@ -44,6 +44,9 @@
     <!-- Stuck detection parameters - reduced for faster fallback -->
     <param name="stuck_timeout" value="3.0"/>  <!-- Time in seconds before considering robot stuck -->
     <param name="stuck_distance_threshold" value="0.05"/>  <!-- Minimum movement required -->
+  
+    <!-- Goal control -->
+    <param name="loop_goals" value="false"/>  <!-- Set to false to stop after completing all goals -->
   </node>
 
 </launch>

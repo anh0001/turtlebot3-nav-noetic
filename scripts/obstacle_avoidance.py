@@ -22,8 +22,9 @@ class SimpleTurtlebotNavigator:
         self.obstacle_threshold = rospy.get_param('~obstacle_threshold', 0.5)  # Increased for better responsiveness
         self.linear_speed = rospy.get_param('~linear_speed', 0.2)
         self.angular_speed = rospy.get_param('~angular_speed', 0.6)
-        self.stuck_timeout = rospy.get_param('~stuck_timeout', 3.0)  # Time in seconds before considering robot stuck
+        self.stuck_timeout = rospy.get_param('~stuck_timeout', 10.0)  # Time in seconds before considering robot stuck
         self.stuck_distance_threshold = rospy.get_param('~stuck_distance_threshold', 0.05)  # Minimum movement required
+        self.loop_goals = rospy.get_param('~loop_goals', False)  # Whether to loop through goals or stop after completing all
         
         # Status variables
         self.position = {'x': 0.0, 'y': 0.0}
@@ -214,14 +215,21 @@ class SimpleTurtlebotNavigator:
                 
                 # Check if all goals have been reached
                 if self.current_goal_index >= len(self.goals):
-                    rospy.loginfo("All goals have been reached! Navigation complete.")
-                    self.goals_completed = True
-                    # Stop the robot
-                    self.cmd_vel_pub.publish(Twist())
-                    if self.navigation_active:
-                        self.move_base_client.cancel_all_goals()
-                        self.navigation_active = False
-                    break
+                    if self.loop_goals:
+                        rospy.loginfo("All goals completed. Looping back to first goal.")
+                        self.current_goal_index = 0
+                        # Send the first goal again
+                        current_goal = self.goals[self.current_goal_index]
+                        self.send_goal(current_goal['x'], current_goal['y'], current_goal['yaw'])
+                    else:
+                        rospy.loginfo("All goals have been reached! Navigation complete.")
+                        self.goals_completed = True
+                        # Stop the robot
+                        self.cmd_vel_pub.publish(Twist())
+                        if self.navigation_active:
+                            self.move_base_client.cancel_all_goals()
+                            self.navigation_active = False
+                        break
                 else:
                     # Send the next goal
                     current_goal = self.goals[self.current_goal_index]
@@ -233,8 +241,18 @@ class SimpleTurtlebotNavigator:
             
             self.rate.sleep()
         
-        rospy.loginfo("Navigation complete. Node will remain active but idle.")
-        rospy.spin()
+        # After while loop ends - handle case when we've exited the loop
+        if self.goals_completed:
+            rospy.loginfo("All goals completed. Navigation has finished.")
+            # Make sure the robot is stopped
+            self.cmd_vel_pub.publish(Twist())
+            
+            # Wait here instead of exiting, to keep the node active
+            rospy.loginfo("Robot is now idle. Node will remain active.")
+            try:
+                rospy.spin()
+            except rospy.ROSInterruptException:
+                pass
 
     def check_if_stuck(self):
         """Check if the robot has been not moving for too long"""
@@ -343,7 +361,24 @@ class SimpleTurtlebotNavigator:
                     rospy.loginfo("move_base fallback reached the goal successfully!")
                     self.goal_reached = False
                     self.using_move_base_fallback = False
-                    current_goal_index = (current_goal_index + 1) % len(self.goals)
+                    current_goal_index += 1
+                    
+                    # Check if all goals have been completed
+                    if current_goal_index >= len(self.goals):
+                        if self.loop_goals:
+                            rospy.loginfo("All goals completed. Looping back to first goal.")
+                            current_goal_index = 0
+                        else:
+                            rospy.loginfo("All goals have been reached! Navigation complete.")
+                            self.goals_completed = True
+                            
+                            # Stop the robot
+                            stop_cmd = Twist()
+                            self.cmd_vel_pub.publish(stop_cmd)
+                            
+                            # Break out of the control loop
+                            break
+                    
                     heading_to_goal = False
                     recovery_attempted = False
                     
@@ -355,7 +390,29 @@ class SimpleTurtlebotNavigator:
             # Check if goal is reached
             if distance_to_goal < self.goal_tolerance and not self.turning:
                 rospy.loginfo(f"Goal {current_goal_index + 1} reached! Distance: {distance_to_goal:.2f}m")
-                current_goal_index = (current_goal_index + 1) % len(self.goals)
+                current_goal_index += 1
+                
+                # Check if all goals have been completed
+                if current_goal_index >= len(self.goals):
+                    if self.loop_goals:
+                        rospy.loginfo("All goals completed. Looping back to first goal.")
+                        current_goal_index = 0
+                    else:
+                        rospy.loginfo("All goals have been reached! Navigation complete.")
+                        self.goals_completed = True
+                        
+                        # Stop the robot
+                        stop_cmd = Twist()
+                        self.cmd_vel_pub.publish(stop_cmd)
+                        
+                        # Cancel any active move_base goals
+                        if self.move_base_available and self.navigation_active:
+                            self.move_base_client.cancel_all_goals()
+                            self.navigation_active = False
+                            
+                        rospy.loginfo("Robot has stopped. Mission complete!")
+                        break
+                
                 heading_to_goal = False
                 recovery_attempted = False
                 
@@ -441,7 +498,6 @@ class SimpleTurtlebotNavigator:
             rospy.loginfo(f"Goal: ({goal_x:.2f}, {goal_y:.2f}), Position: ({self.position['x']:.2f}, {self.position['y']:.2f}), Distance: {distance_to_goal:.2f}m")
             
             self.rate.sleep()
-    
     def normalize_angle(self, angle):
         """Normalize an angle to [-pi, pi]"""
         while angle > pi:
