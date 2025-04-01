@@ -85,11 +85,11 @@ This task demonstrates controlling the Turtlebot3 in Gazebo, keeping it moving w
 
 2. Manual Navigation with 2D Nav Goal:
    Once the simulation is running, you can use RViz to set navigation goals:
-   - In RViz, click the "2D Nav Goal" button
-   - Click and drag on the map to set a goal pose (position and orientation)
-   - The robot will plan a path and navigate to the goal while avoiding obstacles
-   
-   **[Video Demo: Manual Navigation with 2D Nav Goal]** - *This video demonstrates how to set navigation goals manually using RViz's 2D Nav Goal tool and shows the robot successfully navigating to the target while avoiding obstacles.*
+      - In RViz, click the "2D Nav Goal" button
+      - Click and drag on the map to set a goal pose (position and orientation)
+      - The robot will plan a path and navigate to the goal while avoiding obstacles
+      
+      **[Video Demo: Manual Navigation with 2D Nav Goal](assets/manual_navigation_demo.mp4)** - *This video demonstrates how to set navigation goals manually using RViz's 2D Nav Goal tool and shows the robot successfully navigating to the target while avoiding obstacles.*
 
 3. Running the Patrol Mode:
    To have the robot automatically patrol between predefined waypoints:
