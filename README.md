@@ -91,8 +91,7 @@ This task demonstrates controlling the Turtlebot3 in Gazebo, keeping it moving w
          
    [![Watch the video](https://img.youtube.com/vi/padZkPP0xtY/0.jpg)](https://www.youtube.com/watch?v=padZkPP0xtY)
          
-   **Manual Navigation with 2D Nav Goal** - *This video demonstrates how to set navigation goals manually using RViz's 2D Nav Goal tool and shows the robot successfully navigating to the target while avoiding obstacles.*
-
+   **[Video Demo: Manual Navigation with 2D Nav Goal]** - *This video demonstrates how to set navigation goals manually using RViz's 2D Nav Goal tool and shows the robot successfully navigating to the target while avoiding obstacles.*
 
 3. Running the Patrol Mode:
    To have the robot automatically patrol between predefined waypoints:
