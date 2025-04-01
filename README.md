@@ -165,10 +165,10 @@ This task demonstrates a unique skill in robot development: creating a fully doc
    - It demonstrates direct control of robot velocity commands
    - It showcases custom parameter tuning for different environments
    
+   [![Watch the video](https://img.youtube.com/vi/ub2nlCgUJvM/0.jpg)](   https://www.youtube.com/watch?v=ub2nlCgUJvM)
+
    **[Video Demo: Predefined Goals Navigation]** - *This video demonstrates the robot navigating to predefined goal locations using the custom navigation system, highlighting the specialized obstacle avoidance algorithm in action.*
    
-   **[Video Demo: Custom Obstacle Avoidance]** - *This detailed video focuses specifically on how the custom obstacle detection and control logic handles challenging situations, showing the advantages of the custom implementation compared to standard navigation.*
-
 ### Running the Dockerized Simulation
 
 1. Start the Docker container:
