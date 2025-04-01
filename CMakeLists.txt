@@ -29,6 +29,7 @@ include_directories(
 catkin_install_python(PROGRAMS
   scripts/obstacle_avoidance.py
   scripts/patrol.py
+  scripts/initial_pose_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
