@@ -22,7 +22,7 @@ class SimpleTurtlebotNavigator:
         self.obstacle_threshold = rospy.get_param('~obstacle_threshold', 0.5)  # Increased for better responsiveness
         self.linear_speed = rospy.get_param('~linear_speed', 0.2)
         self.angular_speed = rospy.get_param('~angular_speed', 0.6)
-        self.stuck_timeout = rospy.get_param('~stuck_timeout', 10.0)  # Time in seconds before considering robot stuck
+        self.stuck_timeout = rospy.get_param('~stuck_timeout', 5.0)  # Time in seconds before considering robot stuck
         self.stuck_distance_threshold = rospy.get_param('~stuck_distance_threshold', 0.05)  # Minimum movement required
         self.loop_goals = rospy.get_param('~loop_goals', False)  # Whether to loop through goals or stop after completing all
         
