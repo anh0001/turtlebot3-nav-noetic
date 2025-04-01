@@ -33,8 +33,8 @@
   <!-- Launch the custom obstacle avoidance node -->
   <node pkg="turtlebot3-nav-noetic" type="obstacle_avoidance.py" name="obstacle_avoidance" output="screen">
     <param name="use_move_base" value="false"/>
-    <param name="obstacle_threshold" value="0.6"/>
-    <param name="danger_threshold" value="0.4"/>
+    <param name="obstacle_threshold" value="0.3"/>
+    <param name="danger_threshold" value="0.2"/>
     <param name="linear_speed" value="0.2"/>
     <param name="angular_speed" value="0.6"/>
   </node>
