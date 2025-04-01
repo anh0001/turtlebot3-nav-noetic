@@ -77,7 +77,7 @@ RUN echo "source /opt/ros/noetic/setup.bash" >> /root/.bashrc
 RUN echo "export TURTLEBOT3_MODEL=burger" >> /root/.bashrc
 
 # Create a welcome message that displays when the container starts
-RUN echo '#!/bin/bash\necho -e "\n\033[1;32mWelcome to TurtleBot3 Navigation Simulator!\033[0m\n\nAccess the simulation through your browser at: \033[1;36mhttp://localhost:6080/vnc.html\033[0m\n\nCommands to run in this terminal:\n\033[1;33m1. Launch the master launch file that coordinates both simulation and navigation:\033[0m\n   roslaunch turtlebot3-nav-noetic turtlebot3_master.launch\n\033[1;33m2. For obstacle avoidance:\033[0m\n   rosrun turtlebot3-nav-noetic obstacle_avoidance.py\n\033[1;33m3. For patrol mode:\033[0m\n   rosrun turtlebot3-nav-noetic patrol.py\n"' > /root/welcome.sh && \
+RUN echo '#!/bin/bash\necho -e "\n\033[1;32mWelcome to TurtleBot3 Navigation Simulator!\033[0m\n\nAccess the simulation through your browser at: \033[1;36mhttp://localhost:6080/vnc.html\033[0m\n\n\033[1;33mCommands to run navigation:\033[0m\n\n\033[1;36m1. Launch the master file that coordinates simulation and navigation:\033[0m\n   roslaunch turtlebot3-nav-noetic turtlebot3_master.launch\n\n\033[1;36m2. Launch predefined goals with obstacle avoidance:\033[0m\n   roslaunch turtlebot3-nav-noetic turtlebot3_predefined_goals.launch\n\n\033[1;36m3. Launch patrol mode:\033[0m\n   roslaunch turtlebot3-nav-noetic turtlebot3_patrol.launch\n\n\033[1;33mIndividual script commands:\033[0m\n   rosrun turtlebot3-nav-noetic obstacle_avoidance.py\n   rosrun turtlebot3-nav-noetic patrol.py\n   rosrun turtlebot3-nav-noetic initial_pose_publisher.py\n"' > /root/welcome.sh && \
     chmod +x /root/welcome.sh && \
     echo "/root/welcome.sh" >> /root/.bashrc
 
