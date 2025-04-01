@@ -105,6 +105,8 @@ This task demonstrates controlling the Turtlebot3 in Gazebo, keeping it moving w
    - Implementing loop behaviors with configurable wait times
    - Handling goal completion and failure recovery
    
+   [![Watch the video](https://img.youtube.com/vi/WtzLR8X_0VQ/0.jpg)](   https://www.youtube.com/watch?v=WtzLR8X_0VQ)
+
    **[Video Demo: Robot Patrol]** - *This video shows the Turtlebot3 autonomously patrolling between predefined waypoints, demonstrating the continuous navigation capability and obstacle avoidance during patrol mode.*
 
 ### Verification
