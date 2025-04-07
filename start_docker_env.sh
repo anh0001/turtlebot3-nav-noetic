@@ -6,6 +6,7 @@
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 echo -e "${YELLOW}Starting Turtlebot3 Navigation Docker Environment...${NC}"
@@ -26,6 +27,21 @@ if ! command -v docker-compose &> /dev/null; then
     echo -e "${YELLOW}Docker Compose is not installed. Please install Docker Compose first.${NC}"
     exit 1
 fi
+
+# Detect system architecture
+ARCH=$(uname -m)
+if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
+    echo -e "${GREEN}ARM architecture detected (${ARCH})${NC}"
+    export DOCKER_PLATFORM="linux/arm64"
+    export BASE_IMAGE="arm64v8/ubuntu:20.04"
+else
+    echo -e "${GREEN}x86 architecture detected (${ARCH})${NC}"
+    export DOCKER_PLATFORM="linux/amd64"
+    export BASE_IMAGE="ubuntu:20.04"
+fi
+
+echo -e "${GREEN}Using platform: ${DOCKER_PLATFORM}${NC}"
+echo -e "${GREEN}Using base image: ${BASE_IMAGE}${NC}"
 
 # Build and start the Docker container
 echo -e "${GREEN}Building and starting the Docker container...${NC}"

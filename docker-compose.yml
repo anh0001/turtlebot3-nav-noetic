@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - BASE_IMAGE=${BASE_IMAGE:-ubuntu:20.04}
     container_name: turtlebot3-nav-noetic
     environment:
       - DISPLAY=:1
@@ -14,5 +16,5 @@ services:
     volumes:
       - ./:/root/catkin_ws/src/turtlebot3-nav-noetic
     restart: unless-stopped
-    # For Apple Silicon Macs, we need to specify the platform
-    platform: linux/amd64
+    # Use detected platform or default to amd64
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
